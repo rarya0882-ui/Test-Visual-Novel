@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Milia - Arrange Sentences</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: #1a1e2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, 'Segoe UI', sans-serif;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            max-height: 950px;
+            background-color: #2a2f3f;
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('../assets/bg_arrange.png');
+            background-size: cover;
+            background-position: center;
+            z-index: 1;
+        }
+        /* Milia character - centered at bottom, initially visible */
+        .character-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 2;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .character-layer img {
+            max-width: 85%;
+            width: auto;
+            height: 48vh;
+            max-height: 460px;
+            object-fit: contain;
+            object-position: bottom;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3));
+        }
+        /* Dialogue box - bottom, overlapping Milia's lower body */
+        .dialogue-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(14px);
+            border-radius: 28px 28px 0 0;
+            padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+            z-index: 3;
+            max-height: 35vh;
+            overflow-y: auto;
+            transition: opacity 0.2s;
+        }
+        .speaker-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #FFD966;
+            margin-bottom: 6px;
+        }
+        .dialogue-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #f0f0f0;
+            margin-bottom: 12px;
+        }
+        /* Activity panel - hidden initially, appears above Milia's head */
+        .activity-content {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 58vh;
+            background: rgba(255,255,245,0.96);
+            border-radius: 32px;
+            padding: 18px;
+            overflow-y: auto;
+            z-index: 4;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            backdrop-filter: blur(2px);
+            display: none;
+        }
+        .activity-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2c3e66;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .sentences-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 15px 0;
+        }
+        .sentence-item {
+            background: white;
+            border-radius: 24px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .sentence-number {
+            width: 40px;
+            height: 40px;
+            background: #6c5ce7;
+            color: white;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .sentence-text {
+            flex: 1;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #1e2a32;
+        }
+        .order-select {
+            width: 65px;
+            padding: 6px;
+            border-radius: 40px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            font-size: 0.85rem;
+            text-align: center;
+            font-weight: bold;
+        }
+        .check-btn {
+            background: #FFB347;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: #1e2a32;
+            cursor: pointer;
+            width: 100%;
+            margin: 15px 0;
+        }
+        .feedback-area {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 28px;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+        .next-quiz-btn {
+            background: #4caf50;
+            border: none;
+            padding: 10px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 10px;
+            color: white;
+        }
+        .show-blog-btn, .mute-btn {
+            position: absolute;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            border: none;
+            cursor: pointer;
+            z-index: 20;
+            color: white;
+        }
+        .show-blog-btn {
+            bottom: 20px;
+            left: 20px;
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+        }
+        .mute-btn {
+            top: 16px;
+            right: 16px;
+            font-size: 1.5rem;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-height: 700px) {
+            .character-layer img { height: 42vh; }
+            .activity-content { bottom: 52vh; }
+            .dialogue-area { max-height: 30vh; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="bg-layer"></div>
+    <div class="character-layer" id="characterLayer">
+        <img id="characterImg" src="../assets/milia_normal.png" alt="Milia">
+    </div>
+    <div class="dialogue-area" id="dialogueArea">
+        <div class="speaker-name">🌸 Milia</div>
+        <div class="dialogue-text" id="dialogueText"></div>
+        <div id="dynamicUI"></div>
+    </div>
+    <div class="activity-content" id="activityContent"></div>
+    <button class="show-blog-btn" id="showBlogBtn">📄 Show Blog</button>
+    <button class="mute-btn" id="muteToggleBtn">🔊</button>
+</div>
+
+<script>
+    // Full blog text
+    const fullBlogText = `I Love Trains
+
+My choice of public transportation is the train - the commuter line, to be exact. I live outside of a big city. I often have to travel many kilometers almost every day. Fortunately, the commuter line helps me to get to the big city fast. It is faster than the bus and the public minivan. Also, the commuter line fare is reasonable. It costs me only Rp3,000 for the first five stations. It is much cheaper than the bus fare. Finally, the commuter line runs on tracks or rails, so, it is the safest of all public land transportations.`;
+
+    // Correct order of sentences
+    const correctOrderSentences = [
+        "The blogger is a fan of the commuter line.",
+        "The blogger lives quite far from the big city.",
+        "The commuter line takes the blogger to the big city in a very short time.",
+        "Taking the commuter line is not expensive.",
+        "Taking the commuter line makes the blogger feel safe."
+        
+    ];
+
+    let currentShuffled = [];
+    let selectedOrders = new Array(5).fill(0);
+    let waitingForNext = false;  // when true, no more checks (after correct)
+    let checkInProgress = false;  // prevent double feedback
+
+    // DOM elements
+    const dialogueTextSpan = document.getElementById("dialogueText");
+    const characterImg = document.getElementById("characterImg");
+    const dynamicUI = document.getElementById("dynamicUI");
+    const activityContainer = document.getElementById("activityContent");
+    const muteBtn = document.getElementById("muteToggleBtn");
+    const characterLayer = document.getElementById("characterLayer");
+    const dialogueArea = document.getElementById("dialogueArea");
+
+    // Audio
+    let bgmAudio = null;
+    let isMuted = false;
+    function playBGM() {
+        if (bgmAudio) bgmAudio.pause();
+        bgmAudio = new Audio("../audio/main2.mp3");
+        bgmAudio.loop = true;
+        bgmAudio.volume = isMuted ? 0 : 0.5;
+        bgmAudio.play().catch(e => console.log("BGM play failed", e));
+    }
+    function toggleMute() { isMuted = !isMuted; if(bgmAudio) bgmAudio.volume = isMuted ? 0 : 0.5; muteBtn.textContent = isMuted ? "🔇" : "🔊"; }
+    muteBtn.onclick = toggleMute;
+    playBGM();
+
+    function setPose(pose) {
+        const poses = {
+            normal: "../assets/milia_normal.png",
+            smug: "../assets/milia_smug.png",
+            serious: "../assets/milia_serious.png",
+            thinking: "../assets/milia_thinking.png"
+        };
+        characterImg.src = poses[pose] || poses.normal;
+    }
+
+    function showMilia() {
+        characterLayer.classList.remove("hidden");
+        dialogueArea.classList.remove("hidden");
+    }
+
+    function hideMilia() {
+        characterLayer.classList.add("hidden");
+        dialogueArea.classList.add("hidden");
+    }
+
+    function displayMiliaMessage(text, pose="normal") {
+        dialogueTextSpan.innerText = text;
+        setPose(pose);
+        showMilia();
+    }
+
+    function clearDynamicUI() {
+        dynamicUI.innerHTML = "";
+    }
+
+    function shuffleArray(arr) {
+        const shuffled = [...arr];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    function renderQuiz() {
+        let html = `<div class="activity-title">📝 Arrange the Sentences (1 to 5)</div>`;
+        html += `<div class="sentences-list">`;
+        for (let i = 0; i < currentShuffled.length; i++) {
+            html += `
+                <div class="sentence-item">
+                    <div class="sentence-number">${i+1}</div>
+                    <div class="sentence-text">${currentShuffled[i]}</div>
+                    <select class="order-select" data-index="${i}">
+                        <option value="0">-</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+            `;
+        }
+        html += `</div>`;
+        html += `<button class="check-btn" id="checkOrderBtn">✅ Check Order</button>`;
+        html += `<div class="feedback-area" id="feedbackArea"></div>`;
+        activityContainer.innerHTML = html;
+
+        // Restore selected values
+        for (let i = 0; i < selectedOrders.length; i++) {
+            const select = document.querySelector(`.order-select[data-index='${i}']`);
+            if (select && selectedOrders[i] !== 0) select.value = selectedOrders[i];
+        }
+
+        document.getElementById("checkOrderBtn").addEventListener("click", checkOrder);
+    }
+
+    function checkOrder() {
+        if (waitingForNext || checkInProgress) return;
+        checkInProgress = true;
+
+        const selections = [];
+        for (let i = 0; i < currentShuffled.length; i++) {
+            const select = document.querySelector(`.order-select[data-index='${i}']`);
+            const val = parseInt(select.value);
+            selections.push(val);
+            selectedOrders[i] = val;
+        }
+
+        const validNumbers = [1,2,3,4,5];
+        const used = selections.filter(v => v !== 0);
+        if (used.length !== 5 || !validNumbers.every(n => used.includes(n))) {
+            const feedback = document.getElementById("feedbackArea");
+            feedback.innerHTML = "❌ Please assign a unique number (1 to 5) to each sentence.";
+            displayMiliaMessage("Hmm... You need to order all sentences from 1 to 5, each number only once.", "thinking");
+            setTimeout(() => {
+                hideMilia();
+                checkInProgress = false;
+            }, 2500);
+            return;
+        }
+
+        const correctRankMap = {};
+        correctOrderSentences.forEach((sent, idx) => { correctRankMap[sent] = idx + 1; });
+        let correct = true;
+        for (let i = 0; i < currentShuffled.length; i++) {
+            if (selections[i] !== correctRankMap[currentShuffled[i]]) {
+                correct = false;
+                break;
+            }
+        }
+
+        if (correct) {
+            waitingForNext = true;
+            const playerName = localStorage.getItem("milia_player_name") || "Traveler";
+            displayMiliaMessage(`Well done, ${playerName}! You successfully reconstructed the flow of the blog entry.`, "smug");
+            setTimeout(() => {
+                displayMiliaMessage("Understanding organization is very important in writing. Now let's continue.", "normal");
+                setTimeout(() => {
+                    clearDynamicUI();
+                    const nextBtn = document.createElement("button");
+                    nextBtn.innerText = "🏠 Return to Station";
+                    nextBtn.className = "next-quiz-btn";
+                    nextBtn.onclick = () => { window.location.href = "../index.html"; };
+                    dynamicUI.appendChild(nextBtn);
+                    checkInProgress = false;
+                }, 2000);
+            }, 2000);
+        } else {
+            const wrongIndices = [];
+            for (let i = 0; i < currentShuffled.length; i++) {
+                if (selections[i] !== correctRankMap[currentShuffled[i]]) wrongIndices.push(i+1);
+            }
+            const feedback = document.getElementById("feedbackArea");
+            feedback.innerHTML = `⚠️ The order is not correct. Sentences at positions ${wrongIndices.join(", ")} are misplaced. Try again!`;
+            const hints = [
+                "Hmm... Try reading the original blog again in your mind.",
+                "Pay attention to which idea comes first."
+            ];
+            const randomHint = hints[Math.floor(Math.random() * hints.length)];
+            const pose = randomHint.includes("Pay attention") ? "serious" : "thinking";
+            displayMiliaMessage(randomHint, pose);
+            setTimeout(() => {
+                hideMilia();
+                checkInProgress = false;
+            }, 3000);
+        }
+    }
+
+    function startActivity() {
+        // Initial explanation (Milia visible)
+        displayMiliaMessage("Now that you have finished reading the blog entry... Let us see if you understand the order of the ideas.", "normal");
+        const nextBtn1 = document.createElement("button");
+        nextBtn1.innerText = "Continue";
+        nextBtn1.className = "next-quiz-btn";
+        nextBtn1.onclick = () => {
+            displayMiliaMessage("The sentences below are mixed up. Your task is to arrange them into the correct order based on the blog entry.", "serious");
+            const nextBtn2 = document.createElement("button");
+            nextBtn2.innerText = "Start Quiz";
+            nextBtn2.className = "next-quiz-btn";
+            nextBtn2.onclick = () => {
+                // Hide Milia completely
+                hideMilia();
+                // Clear any leftover messages
+                dialogueTextSpan.innerText = "";
+                clearDynamicUI();
+                // Show and populate the activity panel
+                activityContainer.style.display = "block";
+                currentShuffled = shuffleArray(correctOrderSentences);
+                selectedOrders = new Array(5).fill(0);
+                waitingForNext = false;
+                renderQuiz();
+            };
+            clearDynamicUI();
+            dynamicUI.appendChild(nextBtn2);
+        };
+        clearDynamicUI();
+        dynamicUI.appendChild(nextBtn1);
+    }
+
+    document.getElementById("showBlogBtn").onclick = () => {
+        alert("📖 Blog text:\n\n" + fullBlogText);
+    };
+
+    startActivity();
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Milia - Fill in the Chart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: #1a1e2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, 'Segoe UI', sans-serif;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            max-height: 950px;
+            background-color: #2a2f3f;
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('../assets/bg_chart.png');
+            background-size: cover;
+            background-position: center;
+            z-index: 1;
+        }
+        /* Milia character - centered at bottom */
+        .character-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 2;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .character-layer img {
+            max-width: 85%;
+            width: auto;
+            height: 48vh;
+            max-height: 460px;
+            object-fit: contain;
+            object-position: bottom;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3));
+        }
+        /* Dialogue box - bottom, overlapping Milia's lower body */
+        .dialogue-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(14px);
+            border-radius: 28px 28px 0 0;
+            padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+            z-index: 3;
+            max-height: 35vh;
+            overflow-y: auto;
+            transition: opacity 0.2s;
+        }
+        .speaker-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #FFD966;
+            margin-bottom: 6px;
+        }
+        .dialogue-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #f0f0f0;
+            margin-bottom: 12px;
+        }
+        /* Activity panel - hidden initially, appears above Milia's head */
+        .activity-content {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 58vh;
+            background: rgba(255,255,245,0.96);
+            border-radius: 32px;
+            padding: 18px;
+            overflow-y: auto;
+            z-index: 4;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            backdrop-filter: blur(2px);
+            display: none;
+        }
+        .activity-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2c3e66;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .chart-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .chart-table th, .chart-table td {
+            border: 1px solid #ddd;
+            padding: 12px 10px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 0.85rem;
+        }
+        .chart-table th {
+            background: #6c5ce7;
+            color: white;
+            font-weight: bold;
+        }
+        .chart-table td {
+            background: #fef9e6;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            font-size: 0.85rem;
+            background: white;
+        }
+        .check-btn {
+            background: #FFB347;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: #1e2a32;
+            cursor: pointer;
+            width: 100%;
+            margin: 15px 0;
+        }
+        .feedback-area {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 28px;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+        .next-quiz-btn {
+            background: #4caf50;
+            border: none;
+            padding: 10px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 10px;
+            color: white;
+        }
+        .show-blog-btn, .mute-btn {
+            position: absolute;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            border: none;
+            cursor: pointer;
+            z-index: 20;
+            color: white;
+        }
+        .show-blog-btn {
+            bottom: 20px;
+            left: 20px;
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+        }
+        .mute-btn {
+            top: 16px;
+            right: 16px;
+            font-size: 1.5rem;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-height: 700px) {
+            .character-layer img { height: 42vh; }
+            .activity-content { bottom: 52vh; }
+            .dialogue-area { max-height: 30vh; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="bg-layer"></div>
+    <div class="character-layer" id="characterLayer">
+        <img id="characterImg" src="../assets/milia_normal.png" alt="Milia">
+    </div>
+    <div class="dialogue-area" id="dialogueArea">
+        <div class="speaker-name">🌸 Milia</div>
+        <div class="dialogue-text" id="dialogueText"></div>
+        <div id="dynamicUI"></div>
+    </div>
+    <div class="activity-content" id="activityContent"></div>
+    <button class="show-blog-btn" id="showBlogBtn">📄 Show Blog</button>
+    <button class="mute-btn" id="muteToggleBtn">🔊</button>
+</div>
+
+<script>
+    // Full blog text for reference
+    const fullBlogText = `I Love Trains
+
+My choice of public transportation is the train - the commuter line, to be exact. I live outside of a big city. I often have to travel many kilometers almost every day. Fortunately, the commuter line helps me to get to the big city fast. It is faster than the bus and the public minivan. Also, the commuter line fare is reasonable. It costs me only Rp3,000 for the first five stations. It is much cheaper than the bus fare. Finally, the commuter line runs on tracks or rails, so, it is the safest of all public land transportations.`;
+
+    // Correct answers for the chart
+    const correctAnswers = {
+        opinion: "The blogger loves / is a fan of the commuter line.",
+        reason1: "It is fast (helps get to the big city quickly).",
+        reason2: "It is not expensive (reasonable fare, cheaper than bus).",
+        reason3: "It is safe (runs on tracks/rails)."
+    };
+
+    let waitingForNext = false;
+    let checkInProgress = false;
+
+    // DOM elements
+    const dialogueTextSpan = document.getElementById("dialogueText");
+    const characterImg = document.getElementById("characterImg");
+    const dynamicUI = document.getElementById("dynamicUI");
+    const activityContainer = document.getElementById("activityContent");
+    const muteBtn = document.getElementById("muteToggleBtn");
+    const characterLayer = document.getElementById("characterLayer");
+    const dialogueArea = document.getElementById("dialogueArea");
+
+    // Audio
+    let bgmAudio = null;
+    let isMuted = false;
+    function playBGM() {
+        if (bgmAudio) bgmAudio.pause();
+        bgmAudio = new Audio("../audio/main3.mp3");
+        bgmAudio.loop = true;
+        bgmAudio.volume = isMuted ? 0 : 0.5;
+        bgmAudio.play().catch(e => console.log("BGM play failed", e));
+    }
+    function toggleMute() { isMuted = !isMuted; if(bgmAudio) bgmAudio.volume = isMuted ? 0 : 0.5; muteBtn.textContent = isMuted ? "🔇" : "🔊"; }
+    muteBtn.onclick = toggleMute;
+    playBGM();
+
+    function setPose(pose) {
+        const poses = {
+            normal: "../assets/milia_normal.png",
+            smug: "../assets/milia_smug.png",
+            serious: "../assets/milia_serious.png",
+            thinking: "../assets/milia_thinking.png"
+        };
+        characterImg.src = poses[pose] || poses.normal;
+    }
+
+    function showMilia() {
+        characterLayer.classList.remove("hidden");
+        dialogueArea.classList.remove("hidden");
+    }
+
+    function hideMilia() {
+        characterLayer.classList.add("hidden");
+        dialogueArea.classList.add("hidden");
+    }
+
+    function displayMiliaMessage(text, pose="normal") {
+        dialogueTextSpan.innerText = text;
+        setPose(pose);
+        showMilia();
+    }
+
+    function clearDynamicUI() {
+        dynamicUI.innerHTML = "";
+    }
+
+    // Render the chart activity
+    function renderChart() {
+        const html = `
+            <div class="activity-title">📊 Fill in the Chart</div>
+            <table class="chart-table">
+                <tr><th>Category</th><th>Answer (from the blog)</th></tr>
+                <tr>
+                    <td>Blogger's opinion about the commuter line</td>
+                    <td><input type="text" id="opinion" placeholder="Type your answer..."></td>
+                </tr>
+                <tr>
+                    <td>Reason 1 (speed)</td>
+                    <td><input type="text" id="reason1" placeholder="Type your answer..."></td>
+                </tr>
+                <tr>
+                    <td>Reason 2 (cost)</td>
+                    <td><input type="text" id="reason2" placeholder="Type your answer..."></td>
+                </tr>
+                <tr>
+                    <td>Reason 3 (safety)</td>
+                    <td><input type="text" id="reason3" placeholder="Type your answer..."></td>
+                </tr>
+            </table>
+            <button class="check-btn" id="checkChartBtn">✅ Check Answers</button>
+            <div class="feedback-area" id="feedbackArea"></div>
+        `;
+        activityContainer.innerHTML = html;
+        document.getElementById("checkChartBtn").addEventListener("click", checkChart);
+    }
+
+    // Simple string normalization for comparison (lowercase, trim, remove extra spaces)
+    function normalize(str) {
+        return str.toLowerCase().trim().replace(/\s+/g, ' ');
+    }
+
+    function checkChart() {
+        if (waitingForNext || checkInProgress) return;
+        checkInProgress = true;
+
+        const userOpinion = document.getElementById("opinion").value;
+        const userReason1 = document.getElementById("reason1").value;
+        const userReason2 = document.getElementById("reason2").value;
+        const userReason3 = document.getElementById("reason3").value;
+
+        // Define acceptable variations for each answer (flexible matching)
+        const acceptable = {
+            opinion: ["loves", "is a fan", "likes", "choice is", "my choice", "fan of"],
+            reason1: ["fast", "quickly", "helps me get to the big city fast", "saves time"],
+            reason2: ["not expensive", "reasonable", "cheap", "rp3,000", "cheaper than bus"],
+            reason3: ["safe", "safest", "runs on tracks", "rails", "safest of all"]
+        };
+
+        function isMatch(input, keywords) {
+            const norm = normalize(input);
+            return keywords.some(kw => norm.includes(normalize(kw)));
+        }
+
+        const correctOpinion = isMatch(userOpinion, acceptable.opinion);
+        const correctReason1 = isMatch(userReason1, acceptable.reason1);
+        const correctReason2 = isMatch(userReason2, acceptable.reason2);
+        const correctReason3 = isMatch(userReason3, acceptable.reason3);
+
+        const allCorrect = correctOpinion && correctReason1 && correctReason2 && correctReason3;
+
+        const feedbackDiv = document.getElementById("feedbackArea");
+        if (allCorrect) {
+            waitingForNext = true;
+            feedbackDiv.innerHTML = "✅ All answers correct! Well done!";
+            const playerName = localStorage.getItem("milia_player_name") || "Traveler";
+            displayMiliaMessage(`Excellent, ${playerName}! You filled the chart perfectly.`, "smug");
+            setTimeout(() => {
+                displayMiliaMessage("You really understand the blog entry. Let's continue.", "normal");
+                setTimeout(() => {
+                    clearDynamicUI();
+                    const nextBtn = document.createElement("button");
+                    nextBtn.innerText = "🏠 Return to Station";
+                    nextBtn.className = "next-quiz-btn";
+                    nextBtn.onclick = () => { window.location.href = "../index.html"; };
+                    dynamicUI.appendChild(nextBtn);
+                    checkInProgress = false;
+                }, 2000);
+            }, 2000);
+        } else {
+            let wrongFields = [];
+            if (!correctOpinion) wrongFields.push("Opinion");
+            if (!correctReason1) wrongFields.push("Reason 1 (speed)");
+            if (!correctReason2) wrongFields.push("Reason 2 (cost)");
+            if (!correctReason3) wrongFields.push("Reason 3 (safety)");
+            feedbackDiv.innerHTML = `⚠️ Incorrect: ${wrongFields.join(", ")}. Try again.`;
+            const hints = [
+                "Read the blog again carefully. The opinion is stated at the beginning.",
+                "Look for words like 'fast', 'quickly' for speed.",
+                "Find the sentence about fare and cost.",
+                "The safety reason mentions 'tracks' or 'rails'."
+            ];
+            const randomHint = hints[Math.floor(Math.random() * hints.length)];
+            displayMiliaMessage(randomHint, "thinking");
+            setTimeout(() => {
+                hideMilia();
+                checkInProgress = false;
+            }, 3000);
+        }
+    }
+
+    function startActivity() {
+        displayMiliaMessage("Now let's test your understanding with a chart.", "normal");
+        const nextBtn1 = document.createElement("button");
+        nextBtn1.innerText = "Continue";
+        nextBtn1.className = "next-quiz-btn";
+        nextBtn1.onclick = () => {
+            displayMiliaMessage("Fill in the chart with the blogger's opinion and three reasons from the blog.", "serious");
+            const nextBtn2 = document.createElement("button");
+            nextBtn2.innerText = "Start Chart";
+            nextBtn2.className = "next-quiz-btn";
+            nextBtn2.onclick = () => {
+                hideMilia();
+                activityContainer.style.display = "block";
+                renderChart();
+            };
+            clearDynamicUI();
+            dynamicUI.appendChild(nextBtn2);
+        };
+        clearDynamicUI();
+        dynamicUI.appendChild(nextBtn1);
+    }
+
+    document.getElementById("showBlogBtn").onclick = () => {
+        alert("📖 Blog text:\n\n" + fullBlogText);
+    };
+
+    startActivity();
+</script>
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Milia - Reading My Blog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: #1a1e2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, sans-serif;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            max-height: 950px;
+            background-color: #2a2f3f;
+            position: relative;
+            overflow: hidden;
+        }
+        /* Blog image as <img> for perfect fit */
+        .blog-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            background-color: #2a2f3f;
+            z-index: 1;
+        }
+        .character-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 2;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+        .character-layer img {
+            max-width: 85%;
+            height: 48vh;
+            max-height: 460px;
+            object-fit: contain;
+            object-position: bottom;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3));
+        }
+        .dialogue-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(14px);
+            border-radius: 28px 28px 0 0;
+            padding: 20px 20px max(28px, env(safe-area-inset-bottom));
+            z-index: 3;
+            transition: opacity 0.4s ease;
+        }
+        .speaker-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #FFD966;
+            margin-bottom: 8px;
+        }
+        .dialogue-text {
+            font-size: 1rem;
+            line-height: 1.45;
+            color: #f0f0f0;
+            margin-bottom: 18px;
+            min-height: 4rem;
+        }
+        .blog-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 20px;
+            z-index: 4;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+        }
+        .blog-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .blog-btn {
+            background: #ffb347cc;
+            backdrop-filter: blur(12px);
+            border: none;
+            padding: 14px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #1e2a32;
+            text-align: center;
+            cursor: pointer;
+        }
+        .option-btn {
+            background: #3a4a5c;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin: 5px 0;
+        }
+        .options-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .mute-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            border: none;
+            font-size: 1.8rem;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            color: white;
+        }
+        .back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #000000aa;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            z-index: 20;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-height: 700px) {
+            .character-layer img { height: 42vh; }
+            .blog-overlay { bottom: 110px; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <!-- Blog image as <img> – no cropping, shows full text -->
+    <img class="blog-image" id="blogImage" src="assets/bg_blogpost.png" alt="Blog post">
+
+    <div class="character-layer" id="characterLayer">
+        <img id="characterImg" src="assets/milia_normal.png" alt="Milia">
+    </div>
+    <div class="dialogue-area" id="dialogueArea">
+        <div class="speaker-name">🌸 Milia</div>
+        <div class="dialogue-text" id="dialogueText"></div>
+        <div id="dynamicUI"></div>
+    </div>
+
+    <div class="blog-overlay" id="blogOverlay">
+        <button class="blog-btn" id="readBtn">🔊 Read Aloud</button>
+        <button class="blog-btn" id="continueBtn" style="background: #4caf50cc;">➡️ Continue</button>
+    </div>
+
+    <button class="mute-btn" id="muteToggleBtn">🔊</button>
+    <button class="back-btn" id="backBtn">◀ Back to Station</button>
+</div>
+
+<script>
+    // ----------------------------- AUDIO MANAGER (with ducking) -----------------------------
+    let bgmAudio = null;
+    let readingAudio = null;
+    let isMuted = false;
+    let originalVolume = 1;
+
+    const muteBtn = document.getElementById("muteToggleBtn");
+    muteBtn.onclick = () => {
+        isMuted = !isMuted;
+        if (bgmAudio) bgmAudio.volume = isMuted ? 0 : originalVolume;
+        muteBtn.textContent = isMuted ? "🔇" : "🔊";
+    };
+
+    function playBGM() {
+        if (bgmAudio) { bgmAudio.pause(); bgmAudio = null; }
+        bgmAudio = new Audio("audio/main1.mp3");
+        bgmAudio.loop = true;
+        originalVolume = 1;
+        bgmAudio.volume = isMuted ? 0 : originalVolume;
+        bgmAudio.play().catch(e => console.log("BGM play failed"));
+    }
+
+    function duckBGM() {
+        if (bgmAudio && !isMuted) {
+            originalVolume = bgmAudio.volume;
+            bgmAudio.volume = originalVolume * 0.4;
+        }
+    }
+    function restoreBGM() {
+        if (bgmAudio && !isMuted) {
+            bgmAudio.volume = originalVolume;
+        }
+    }
+
+    function stopReading() {
+        if (readingAudio && !readingAudio.paused) {
+            readingAudio.pause();
+            readingAudio = null;
+            restoreBGM();
+        }
+    }
+
+    // ----------------------------- UI Elements -----------------------------
+    const characterLayer = document.getElementById("characterLayer");
+    const dialogueArea = document.getElementById("dialogueArea");
+    const blogOverlay = document.getElementById("blogOverlay");
+    const dialogueTextSpan = document.getElementById("dialogueText");
+    const dynamicUI = document.getElementById("dynamicUI");
+    const characterImg = document.getElementById("characterImg");
+
+    let playerName = localStorage.getItem("milia_player_name") || "Traveler";
+
+    function setPose(pose) {
+        const poses = {
+            normal: "assets/milia_normal.png",
+            smug: "assets/milia_smug.png",
+            serious: "assets/milia_serious.png",
+            thinking: "assets/milia_thinking.png"
+        };
+        characterImg.src = poses[pose] || poses.normal;
+    }
+
+    function displayDialogue(text, pose = "normal") {
+        dialogueTextSpan.innerText = text;
+        setPose(pose);
+    }
+
+    function clearUI() {
+        dynamicUI.innerHTML = "";
+    }
+
+    // Hide Milia and dialogue box (fade transition)
+    function hideMilia() {
+        characterLayer.style.opacity = "0";
+        dialogueArea.style.opacity = "0";
+        setTimeout(() => {
+            characterLayer.classList.add("hidden");
+            dialogueArea.classList.add("hidden");
+        }, 400);
+    }
+
+    function showMilia() {
+        characterLayer.classList.remove("hidden");
+        dialogueArea.classList.remove("hidden");
+        characterLayer.style.opacity = "1";
+        dialogueArea.style.opacity = "1";
+    }
+
+    // ----------------------------- Milia's intro message then disappear -----------------------------
+    function startIntro() {
+        showMilia();
+        const introMessages = [
+            `Hello ${playerName}, here is the blog post I wanted you to read.`,
+            `Take your time. Read it carefully, and when you're ready, use the buttons below.`,
+            `I'll be right here if you need me.`
+        ];
+        let msgIndex = 0;
+        function showNextMessage() {
+            if (msgIndex < introMessages.length) {
+                displayDialogue(introMessages[msgIndex], msgIndex === 1 ? "serious" : "normal");
+                clearUI();
+                const nextBtn = document.createElement("button");
+                nextBtn.innerText = msgIndex === introMessages.length - 1 ? "Start Reading" : "Continue";
+                nextBtn.className = "option-btn";
+                nextBtn.style.width = "100%";
+                nextBtn.onclick = () => {
+                    msgIndex++;
+                    if (msgIndex >= introMessages.length) {
+                        // After last message, hide Milia and show blog overlay
+                        hideMilia();
+                        blogOverlay.classList.add("visible");
+                    } else {
+                        showNextMessage();
+                    }
+                };
+                dynamicUI.appendChild(nextBtn);
+            }
+        }
+        showNextMessage();
+    }
+
+    // ----------------------------- Blog Buttons Logic -----------------------------
+    const readBtn = document.getElementById("readBtn");
+    const continueBtn = document.getElementById("continueBtn");
+
+    readBtn.onclick = () => {
+        if (readingAudio && !readingAudio.paused) {
+            stopReading();
+            readBtn.innerText = "🔊 Read Aloud";
+        } else {
+            duckBGM();
+            readingAudio = new Audio("audio/read.mp3");
+            readingAudio.play().catch(() => alert("read.mp3 not found in audio folder"));
+            readBtn.innerText = "🔇 Stop Reading";
+            readingAudio.onended = () => {
+                restoreBGM();
+                readBtn.innerText = "🔊 Read Aloud";
+                readingAudio = null;
+            };
+            readingAudio.onerror = () => {
+                restoreBGM();
+                readBtn.innerText = "🔊 Read Aloud";
+                readingAudio = null;
+                alert("Audio file read.mp3 missing.");
+            };
+        }
+    };
+
+    continueBtn.onclick = () => {
+        stopReading();
+        // Hide overlay and ask ready
+        blogOverlay.classList.remove("visible");
+        showMilia();
+        displayDialogue(`Are you ready to continue to the exercise, ${playerName}?`, "normal");
+        clearUI();
+        const grid = document.createElement("div");
+        grid.className = "options-grid";
+        const yesBtn = document.createElement("button");
+        yesBtn.innerText = "✅ Yes, let's go!";
+        yesBtn.className = "option-btn";
+        yesBtn.onclick = () => {
+            // Redirect to exercise page (create later)
+            window.location.href = "modules/exercise_placeholder.html";
+        };
+        const noBtn = document.createElement("button");
+        noBtn.innerText = "❌ No, I want to read again";
+        noBtn.className = "option-btn";
+        noBtn.onclick = () => {
+            // Reset: hide dialogue, show blog overlay again
+            hideMilia();
+            blogOverlay.classList.add("visible");
+        };
+        grid.appendChild(yesBtn);
+        grid.appendChild(noBtn);
+        dynamicUI.appendChild(grid);
+    };
+
+    // Back button to main menu
+    document.getElementById("backBtn").onclick = () => {
+        stopReading();
+        window.location.href = "index.html";
+    };
+
+    // Start everything
+    playBGM();
+    startIntro();
+</script>
+</body>
+</html>

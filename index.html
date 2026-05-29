@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Milia's Station</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #1a1e2c; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: system-ui, 'Segoe UI', sans-serif; }
+        .game-container { width: 100%; max-width: 500px; height: 100vh; max-height: 950px; background-color: #2a2f3f; position: relative; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,0.4); }
+        .bg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center bottom; z-index: 1; }
+        .character-layer { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-end; z-index: 2; pointer-events: none; }
+        .character-layer img { max-width: 85%; height: 48vh; max-height: 460px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3)); }
+        .dialogue-area { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(14px); border-radius: 28px 28px 0 0; padding: 20px 20px max(28px, env(safe-area-inset-bottom)); z-index: 3; }
+        .speaker-name { font-size: 1rem; font-weight: 700; color: #FFD966; margin-bottom: 8px; }
+        .dialogue-text { font-size: 1rem; line-height: 1.45; color: #f0f0f0; margin-bottom: 18px; min-height: 4rem; }
+        .input-area { display: flex; gap: 12px; margin: 12px 0 8px; }
+        .name-input { flex: 1; padding: 12px 16px; border-radius: 40px; border: none; background: #2e3a48; color: white; font-size: 1rem; outline: none; }
+        .next-btn, .option-btn { background: #FFB347; border: none; padding: 10px 22px; border-radius: 40px; font-weight: bold; font-size: 0.9rem; color: #1e2a32; cursor: pointer; }
+        .options-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+        .option-btn { background: #3a4a5c; color: white; text-align: center; padding: 12px; width: 100%; }
+        .option-btn.special { background: #6c5ce7; }
+        .idle-note { font-size: 0.75rem; text-align: center; margin-top: 12px; color: #bbccdd; font-style: italic; }
+        .mute-btn { position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; font-size: 1.8rem; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; color: white; }
+        @media (max-height: 700px) { .character-layer img { height: 42vh; } .dialogue-area { padding: 14px 18px max(28px, env(safe-area-inset-bottom)); } }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="bg-layer" id="bgLayer" style="background-image: url('assets/bg_main.png');"></div>
+    <div class="character-layer"><img id="characterImg" src="assets/milia_normal.png" alt="Milia"></div>
+    <div class="dialogue-area">
+        <div class="speaker-name">🌸 Milia</div>
+        <div class="dialogue-text" id="dialogueText">Loading...</div>
+        <div id="dynamicUI"></div>
+        <div class="idle-note" id="idleNote"></div>
+    </div>
+    <button class="mute-btn" id="muteToggleBtn">🔊</button>
+</div>
+
+<script>
+    // Audio Manager (simple)
+    let currentAudio = null;
+    let isMuted = false;
+    let userInteracted = false;
+
+    function enableAudio() { if (userInteracted) return; userInteracted = true; new Audio().play().catch(()=>{}); }
+    function playMainBGM() { if (!userInteracted) return; if (currentAudio) currentAudio.pause(); const audio = new Audio("audio/main.mp3"); audio.loop = true; audio.volume = isMuted ? 0 : 1; audio.play().catch(e=>console.log); currentAudio = audio; }
+    function stopBGM() { if (currentAudio) { currentAudio.pause(); currentAudio = null; } }
+    function toggleMute() { isMuted = !isMuted; if (currentAudio) currentAudio.volume = isMuted ? 0 : 1; return isMuted; }
+
+    const muteBtn = document.getElementById("muteToggleBtn");
+    muteBtn.onclick = () => { const muted = toggleMute(); muteBtn.textContent = muted ? "🔇" : "🔊"; if (!userInteracted) { enableAudio(); playMainBGM(); } };
+
+    // DOM elements
+    const bgLayer = document.getElementById("bgLayer");
+    const characterImg = document.getElementById("characterImg");
+    const dialogueTextSpan = document.getElementById("dialogueText");
+    const dynamicUI = document.getElementById("dynamicUI");
+    const idleNoteDiv = document.getElementById("idleNote");
+
+    let playerName = localStorage.getItem("milia_player_name") || "";
+    let hasCompletedIntro = localStorage.getItem("milia_intro_done") === "true";  // flag to skip long intro
+
+    // Helper functions
+    function setPose(pose) {
+        const poses = {
+            normal: "assets/milia_normal.png",
+            smug: "assets/milia_smug.png",
+            serious: "assets/milia_serious.png",
+            thinking: "assets/milia_thinking.png",
+            angry: "assets/milia_angry.png",
+            disappointed: "assets/milia_disappointed.png",
+            surprised: "assets/milia_surprised.png"
+        };
+        characterImg.src = poses[pose] || poses.normal;
+    }
+
+    function displayDialogue(text, pose = "normal") {
+        dialogueTextSpan.innerText = text;
+        setPose(pose);
+    }
+
+    function clearUI() {
+        dynamicUI.innerHTML = "";
+    }
+
+    // Show main menu with activity buttons
+    function showMainMenu() {
+        displayDialogue(`Choose an activity, ${playerName}. I'll help you learn.`, "normal");
+        clearUI();
+        const grid = document.createElement("div");
+        grid.className = "options-grid";
+        const activities = [
+            { label: "💬 Talk with Milia", link: "modules/talk_milia.html" },
+            { label: "📖 Reading — “My Blog”", link: "reading_blog.html" },
+            { label: "✍️ Arrange Sentences", link: "modules/arrange.html" },
+            { label: "📊 Fill in the Chart", link: "modules/chart.html" },
+            { label: "🔄 Arrange Jumbled Entry", link: "modules/jumbled.html" }
+        ];
+        activities.forEach(act => {
+            const btn = document.createElement("button");
+            btn.innerText = act.label;
+            btn.className = "option-btn";
+            if (act.label.includes("Talk")) btn.classList.add("special");
+            btn.onclick = () => {
+                if (!userInteracted) { enableAudio(); playMainBGM(); }
+                stopBGM();
+                window.location.href = act.link;
+            };
+            grid.appendChild(btn);
+        });
+        dynamicUI.appendChild(grid);
+        idleNoteDiv.innerText = "💡 A good blog needs reasons, not just opinions!";
+    }
+
+    // Return dialogue (after coming back from an activity)
+    function showReturnDialogue() {
+        displayDialogue(`Take your time, ${playerName}. Learning little by little is still progress.`, "thinking");
+        clearUI();
+        const nextBtn = document.createElement("button");
+        nextBtn.innerText = "Back to Activities";
+        nextBtn.className = "next-btn";
+        nextBtn.style.width = "100%";
+        nextBtn.onclick = () => {
+            showMainMenu();
+        };
+        dynamicUI.appendChild(nextBtn);
+        idleNoteDiv.innerText = "✨ Milia is here to help.";
+        // Optional SFX: we can't easily play station announcement without audio file, but you can add later.
+    }
+
+    // Ask for player name (first time only)
+    function askName() {
+        clearUI();
+        const container = document.createElement("div");
+        container.className = "input-area";
+        const input = document.createElement("input");
+        input.placeholder = "Enter your name...";
+        input.className = "name-input";
+        if (playerName) input.value = playerName;
+        const btn = document.createElement("button");
+        btn.innerText = "Start";
+        btn.className = "next-btn";
+        btn.onclick = () => {
+            let name = input.value.trim();
+            if (!name) {
+                displayDialogue("Please tell me your name.", "thinking");
+                setTimeout(askName, 1000);
+                return;
+            }
+            playerName = name;
+            localStorage.setItem("milia_player_name", playerName);
+            localStorage.setItem("milia_intro_done", "true");
+            hasCompletedIntro = true;
+            // After naming, show the follow-up dialogue (the "take your time" message) and then menu
+            showReturnDialogue();
+        };
+        container.appendChild(input);
+        container.appendChild(btn);
+        dynamicUI.appendChild(container);
+        input.focus();
+    }
+
+    // Full intro sequence (only for brand new players)
+    function startFullIntro() {
+        const introMessages = [
+            "Ah... there you are.",
+            "Welcome, traveler.",
+            "This station is a little quiet today... but that only means we can study peacefully together.",
+            "My name is Milia.",
+            "And you are...?"
+        ];
+        let idx = 0;
+        function showNext() {
+            if (idx < introMessages.length) {
+                let pose = (idx === 3) ? "normal" : "thinking";
+                if (idx === 4) pose = "thinking";
+                displayDialogue(introMessages[idx], pose);
+                idx++;
+                clearUI();
+                const nextBtn = document.createElement("button");
+                nextBtn.innerText = "Continue";
+                nextBtn.className = "next-btn";
+                nextBtn.style.width = "100%";
+                if (idx === introMessages.length) {
+                    // After the last message, ask for name
+                    nextBtn.onclick = () => {
+                        askName();
+                    };
+                } else {
+                    nextBtn.onclick = () => {
+                        showNext();
+                    };
+                }
+                dynamicUI.appendChild(nextBtn);
+            }
+        }
+        showNext();
+    }
+
+    // Entry point: decide which flow to use
+    if (hasCompletedIntro && playerName) {
+        // Returning player: show the "Take your time" return dialogue
+        // But we also need to ensure the name is used.
+        setPose("thinking");
+        displayDialogue(`Take your time, ${playerName}. Learning little by little is still progress.`, "thinking");
+        clearUI();
+        const continueBtn = document.createElement("button");
+        continueBtn.innerText = "Show Activities";
+        continueBtn.className = "next-btn";
+        continueBtn.style.width = "100%";
+        continueBtn.onclick = () => {
+            showMainMenu();
+        };
+        dynamicUI.appendChild(continueBtn);
+        idleNoteDiv.innerText = "✨ Milia is here to help.";
+        // Start BGM after first interaction? The user will click the button, which triggers audio.
+        // We'll also set a one-time click listener on the container to enable audio.
+        const enableAudioOnce = () => {
+            if (!userInteracted) {
+                enableAudio();
+                playMainBGM();
+            }
+            document.body.removeEventListener('click', enableAudioOnce);
+        };
+        document.body.addEventListener('click', enableAudioOnce);
+    } else {
+        // First time visitor: full intro
+        startFullIntro();
+    }
+</script>
+</body>
+</html>
