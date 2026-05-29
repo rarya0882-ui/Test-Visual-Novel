@@ -110,6 +110,20 @@
             };
             grid.appendChild(btn);
         });
+        // Inside showMainMenu(), after the grid of activities, add:
+const resetBtn = document.createElement("button");
+resetBtn.innerText = "🔄 New Game (Reset Progress)";
+resetBtn.className = "option-btn";
+resetBtn.style.marginTop = "16px";
+resetBtn.style.background = "#aa2e2e";
+resetBtn.onclick = () => {
+    if (confirm("This will erase your saved name and progress. Start over?")) {
+        localStorage.removeItem("milia_player_name");
+        localStorage.removeItem("milia_intro_done");
+        window.location.reload();
+    }
+};
+grid.appendChild(resetBtn);
         dynamicUI.appendChild(grid);
         idleNoteDiv.innerText = "💡 A good blog needs reasons, not just opinions!";
     }
