@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Milia - Fill in the Chart (Drag & Drop)</title>
+    <title>Milia - Fill in the Chart (Select & Place)</title>
     <style>
         * {
             margin: 0;
@@ -109,48 +109,45 @@
             margin-bottom: 12px;
             text-align: center;
         }
-        /* Two column layout: options (left) and chart (right) for wider screens? But on mobile, stack */
-        .drag-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .options-area {
+        .cards-area {
             background: #e9ecef;
             border-radius: 24px;
             padding: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 16px;
         }
-        .options-title {
+        .cards-title {
             font-weight: bold;
             margin-bottom: 10px;
             color: #2c3e66;
+            font-size: 0.9rem;
         }
-        .draggable-cards {
+        .cards-container {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             justify-content: center;
         }
-        .drag-card {
+        .card {
             background: #6c5ce7;
             color: white;
             padding: 10px 14px;
             border-radius: 40px;
             font-size: 0.8rem;
-            cursor: grab;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            transition: 0.1s;
-            display: inline-block;
             text-align: center;
+            cursor: pointer;
+            transition: 0.1s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         }
-        .drag-card:active {
-            cursor: grabbing;
+        .card.selected {
+            background: #ffb347;
+            color: #1e2a32;
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #ffb347;
         }
-        .drag-card.dragging {
-            opacity: 0.5;
+        .card.disabled {
+            opacity: 0.4;
+            cursor: default;
+            pointer-events: none;
         }
-        /* Chart table */
         .chart-table {
             width: 100%;
             border-collapse: collapse;
@@ -172,26 +169,27 @@
         }
         .chart-table td {
             background: #fef9e6;
-            min-height: 60px;
         }
-        .drop-zone {
-            min-height: 60px;
-            background: #fff3e0;
-            border-radius: 12px;
-            padding: 6px;
-            transition: background 0.1s;
+        .cell-content {
+            min-height: 50px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
         }
-        .drop-zone.drag-over {
-            background: #ffe0b5;
-        }
-        .dropped-item {
+        .placed-item {
             background: #4caf50;
             color: white;
             border-radius: 20px;
-            padding: 5px 10px;
-            display: inline-block;
+            padding: 6px 10px;
             font-size: 0.75rem;
-            margin: 2px;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .empty-cell {
+            color: #aaa;
+            font-style: italic;
+            padding: 4px 0;
             cursor: pointer;
         }
         .check-btn {
@@ -280,20 +278,19 @@
 </div>
 
 <script>
-    // Full blog text
     const fullBlogText = `I Love Trains
 
 My choice of public transportation is the train - the commuter line, to be exact. I live outside of a big city. I often have to travel many kilometers almost every day. Fortunately, the commuter line helps me to get to the big city fast. It is faster than the bus and the public minivan. Also, the commuter line fare is reasonable. It costs me only Rp3,000 for the first five stations. It is much cheaper than the bus fare. Finally, the commuter line runs on tracks or rails, so, it is the safest of all public land transportations.`;
 
-    // Draggable sentence options
-    const optionSentences = [
+    // Available sentences (draggable items)
+    const allOptions = [
         "The blogger loves the commuter line.",
         "The commuter line is fast (gets to the big city quickly).",
         "The fare is reasonable and cheaper than the bus.",
         "It is safe because it runs on tracks/rails."
     ];
 
-    // Mapping: which sentence belongs to which chart row (0=opinion,1=speed,2=cost,3=safety)
+    // Correct mapping: sentence -> cell index (0=opinion,1=speed,2=cost,3=safety)
     const correctMapping = {
         "The blogger loves the commuter line.": 0,
         "The commuter line is fast (gets to the big city quickly).": 1,
@@ -303,14 +300,11 @@ My choice of public transportation is the train - the commuter line, to be exact
 
     let waitingForNext = false;
     let checkInProgress = false;
-    // Store current assignments: each drop zone id -> sentence text (or null)
-    let assignments = {
-        opinion: null,
-        reason1: null,
-        reason2: null,
-        reason3: null
-    };
-    let availableOptions = [...optionSentences]; // track which still not placed
+    let selectedCardText = null;   // currently selected sentence
+
+    // Data model
+    let availableOptions = [...allOptions];   // sentences not yet placed
+    let assignments = [null, null, null, null]; // index 0=opinion,1=speed,2=cost,3=safety
 
     // DOM elements
     const dialogueTextSpan = document.getElementById("dialogueText");
@@ -362,88 +356,84 @@ My choice of public transportation is the train - the commuter line, to be exact
         dynamicUI.innerHTML = "";
     }
 
-    // Drag and drop handlers
-    function handleDragStart(e, text) {
+    // Core logic: place a sentence into a cell
+    function placeSentence(cellIndex) {
         if (waitingForNext) return;
-        e.dataTransfer.setData("text/plain", text);
-        e.dataTransfer.effectAllowed = "move";
-    }
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-    }
-    function handleDragEnter(e) {
-        e.target.closest('.drop-zone')?.classList.add('drag-over');
-    }
-    function handleDragLeave(e) {
-        e.target.closest('.drop-zone')?.classList.remove('drag-over');
-    }
-    function handleDrop(e, zoneId) {
-        e.preventDefault();
-        const dropZone = e.target.closest('.drop-zone');
-        if (dropZone) dropZone.classList.remove('drag-over');
-        if (waitingForNext) return;
-        const sentence = e.dataTransfer.getData("text/plain");
-        if (!sentence) return;
+        if (!selectedCardText) return; // nothing selected
 
-        // Check if sentence is still available (not already placed elsewhere)
-        if (!availableOptions.includes(sentence)) return;
+        // Check if the selected sentence is still available
+        if (!availableOptions.includes(selectedCardText)) return;
 
-        // Check if target zone already has a sentence (replace allowed? We'll allow replace)
-        const current = assignments[zoneId];
-        if (current) {
-            // return the old sentence to available options
-            availableOptions.push(current);
-            assignments[zoneId] = null;
+        // If target cell already has a sentence, move that sentence back to available pool
+        if (assignments[cellIndex] !== null) {
+            const oldSentence = assignments[cellIndex];
+            assignments[cellIndex] = null;
+            availableOptions.push(oldSentence);
         }
+
         // Place new sentence
-        assignments[zoneId] = sentence;
-        // Remove from available options
-        const index = availableOptions.indexOf(sentence);
-        if (index !== -1) availableOptions.splice(index,1);
+        assignments[cellIndex] = selectedCardText;
+        const idx = availableOptions.indexOf(selectedCardText);
+        if (idx !== -1) availableOptions.splice(idx, 1);
+
+        // Clear selection
+        selectedCardText = null;
         renderChart();
     }
 
-    // Remove a sentence from a zone (click on placed item)
-    function removeFromZone(zoneId) {
+    // Remove sentence from a cell (return to available pool)
+    function removeFromCell(cellIndex) {
         if (waitingForNext) return;
-        const sentence = assignments[zoneId];
+        const sentence = assignments[cellIndex];
         if (sentence) {
-            assignments[zoneId] = null;
+            assignments[cellIndex] = null;
             availableOptions.push(sentence);
+            selectedCardText = null; // clear any selection
             renderChart();
         }
     }
 
-    // Render the whole drag & drop UI
+    // Select a card (or deselect if same)
+    function selectCard(text) {
+        if (waitingForNext) return;
+        if (selectedCardText === text) {
+            selectedCardText = null; // deselect
+        } else {
+            selectedCardText = text;
+        }
+        renderChart();
+    }
+
     function renderChart() {
-        // Build HTML for options (only those still available)
-        const optionsHtml = availableOptions.map(opt => `
-            <div class="drag-card" draggable="true" ondragstart="handleDragStart(event, '${opt.replace(/'/g, "\\'")}')">
+        // Build available cards HTML
+        const cardsHtml = availableOptions.map(opt => `
+            <div class="card ${selectedCardText === opt ? 'selected' : ''}" data-text="${opt.replace(/['"]/g, '&quot;')}">
                 ${opt}
             </div>
         `).join('');
-        
-        const zones = {
-            opinion: { label: "Blogger's opinion about the commuter line", value: assignments.opinion },
-            reason1: { label: "Reason 1 (speed)", value: assignments.reason1 },
-            reason2: { label: "Reason 2 (cost)", value: assignments.reason2 },
-            reason3: { label: "Reason 3 (safety)", value: assignments.reason3 }
-        };
+
+        const cellLabels = [
+            "Blogger's opinion about the commuter line",
+            "Reason 1 (speed)",
+            "Reason 2 (cost)",
+            "Reason 3 (safety)"
+        ];
 
         let tableRows = '';
-        for (const [key, zone] of Object.entries(zones)) {
-            const droppedContent = zone.value ? `<div class="dropped-item" onclick="removeFromZone('${key}')">✖ ${zone.value}</div>` : `<div style="color:#aaa; text-align:center;">Drop sentence here</div>`;
+        for (let i = 0; i < assignments.length; i++) {
+            const assigned = assignments[i];
+            let cellHtml = '';
+            if (assigned) {
+                cellHtml = `<div class="placed-item" data-cell="${i}">✖ ${assigned}</div>`;
+            } else {
+                cellHtml = `<div class="empty-cell" data-cell="${i}">⬅ Tap a card above, then tap this cell to place</div>`;
+            }
             tableRows += `
                 <tr>
-                    <td style="width:40%;">${zone.label}</td>
+                    <td style="width:40%;">${cellLabels[i]}</td>
                     <td>
-                        <div class="drop-zone" 
-                             ondragover="handleDragOver(event)" 
-                             ondragenter="handleDragEnter(event)" 
-                             ondragleave="handleDragLeave(event)"
-                             ondrop="handleDrop(event, '${key}')">
-                            ${droppedContent}
+                        <div class="cell-content" data-cell-index="${i}">
+                            ${cellHtml}
                         </div>
                     </td>
                 </tr>
@@ -451,23 +441,41 @@ My choice of public transportation is the train - the commuter line, to be exact
         }
 
         const html = `
-            <div class="activity-title">📊 Drag & Drop – Fill the Chart</div>
-            <div class="drag-container">
-                <div class="options-area">
-                    <div class="options-title">📦 Drag these sentences to the correct chart cells:</div>
-                    <div class="draggable-cards" id="draggableCards">
-                        ${optionsHtml || '<div style="text-align:center;">All sentences placed!</div>'}
-                    </div>
+            <div class="activity-title">📊 Select a sentence, then tap a chart cell to place it</div>
+            <div class="cards-area">
+                <div class="cards-title">📦 Available sentences (tap to select):</div>
+                <div class="cards-container" id="cardsContainer">
+                    ${cardsHtml || '<div style="text-align:center;">All sentences placed!</div>'}
                 </div>
-                <table class="chart-table">
-                    <thead><tr><th>Category</th><th>Your Answer (drag & drop)</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
-                <button class="check-btn" id="checkChartBtn">✅ Check Answers</button>
-                <div class="feedback-area" id="feedbackArea"></div>
             </div>
+            <table class="chart-table">
+                <thead><tr><th>Category</th><th>Your Answer</th></tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+            <button class="check-btn" id="checkChartBtn">✅ Check Answers</button>
+            <div class="feedback-area" id="feedbackArea"></div>
         `;
         activityContainer.innerHTML = html;
+
+        // Attach event listeners after rendering
+        // Card selection
+        document.querySelectorAll('.card').forEach(card => {
+            const text = card.getAttribute('data-text');
+            card.addEventListener('click', () => selectCard(text));
+        });
+        // Cell placement (click on the cell-content area)
+        document.querySelectorAll('.cell-content').forEach(cellDiv => {
+            const cellIndex = parseInt(cellDiv.getAttribute('data-cell-index'));
+            cellDiv.addEventListener('click', (e) => {
+                // Prevent event from bubbling up if clicking on the remove button
+                if (e.target.classList.contains('placed-item')) {
+                    removeFromCell(cellIndex);
+                } else {
+                    placeSentence(cellIndex);
+                }
+            });
+        });
+        // Also attach direct remove on placed-item (already handled above)
         document.getElementById("checkChartBtn").addEventListener("click", checkChart);
     }
 
@@ -475,21 +483,21 @@ My choice of public transportation is the train - the commuter line, to be exact
         if (waitingForNext || checkInProgress) return;
         checkInProgress = true;
 
-        // Validate all four zones are filled
-        const allFilled = assignments.opinion && assignments.reason1 && assignments.reason2 && assignments.reason3;
+        // Check if all cells filled
+        const allFilled = assignments.every(cell => cell !== null);
         const feedbackDiv = document.getElementById("feedbackArea");
         if (!allFilled) {
-            feedbackDiv.innerHTML = "⚠️ Please drag a sentence into every chart cell (Opinion, Reason 1, Reason 2, Reason 3).";
+            feedbackDiv.innerHTML = "⚠️ Please place a sentence in every cell (Opinion, Speed, Cost, Safety).";
             displayMiliaMessage("You need to fill all four boxes.", "thinking");
             setTimeout(() => { hideMilia(); checkInProgress = false; }, 2500);
             return;
         }
 
-        // Check correctness
-        const correctOpinion = (correctMapping[assignments.opinion] === 0);
-        const correctReason1 = (correctMapping[assignments.reason1] === 1);
-        const correctReason2 = (correctMapping[assignments.reason2] === 2);
-        const correctReason3 = (correctMapping[assignments.reason3] === 3);
+        // Verify correctness
+        const correctOpinion = (correctMapping[assignments[0]] === 0);
+        const correctReason1 = (correctMapping[assignments[1]] === 1);
+        const correctReason2 = (correctMapping[assignments[2]] === 2);
+        const correctReason3 = (correctMapping[assignments[3]] === 3);
         const allCorrect = correctOpinion && correctReason1 && correctReason2 && correctReason3;
 
         if (allCorrect) {
@@ -515,12 +523,12 @@ My choice of public transportation is the train - the commuter line, to be exact
             if (!correctReason1) wrongFields.push("Reason 1 (speed)");
             if (!correctReason2) wrongFields.push("Reason 2 (cost)");
             if (!correctReason3) wrongFields.push("Reason 3 (safety)");
-            feedbackDiv.innerHTML = `⚠️ Incorrect: ${wrongFields.join(", ")}. Try dragging the correct sentences.`;
+            feedbackDiv.innerHTML = `⚠️ Incorrect: ${wrongFields.join(", ")}. Try again.`;
             const hints = [
-                "Read the blog again. The opinion is at the beginning.",
-                "Speed reason mentions 'fast' or 'quickly'.",
-                "Cost reason talks about fare and cheaper than bus.",
-                "Safety reason mentions tracks or rails."
+                "The opinion is that the blogger loves the commuter line.",
+                "Speed reason: 'fast', 'quickly'.",
+                "Cost reason: 'reasonable fare', 'cheaper than bus'.",
+                "Safety reason: 'runs on tracks/rails'."
             ];
             const randomHint = hints[Math.floor(Math.random() * hints.length)];
             displayMiliaMessage(randomHint, "thinking");
@@ -537,14 +545,15 @@ My choice of public transportation is the train - the commuter line, to be exact
         nextBtn1.innerText = "Continue";
         nextBtn1.className = "next-quiz-btn";
         nextBtn1.onclick = () => {
-            displayMiliaMessage("Drag each sentence into the correct category: Opinion, Speed Reason, Cost Reason, or Safety Reason.", "serious");
+            displayMiliaMessage("Tap a sentence to select it, then tap an empty cell to place it. Tap a placed sentence to remove it.", "serious");
             const nextBtn2 = document.createElement("button");
             nextBtn2.innerText = "Start Chart";
             nextBtn2.className = "next-quiz-btn";
             nextBtn2.onclick = () => {
-                // Reset assignments and available options
-                assignments = { opinion: null, reason1: null, reason2: null, reason3: null };
-                availableOptions = [...optionSentences];
+                // Reset data
+                availableOptions = [...allOptions];
+                assignments = [null, null, null, null];
+                selectedCardText = null;
                 waitingForNext = false;
                 hideMilia();
                 activityContainer.style.display = "block";
@@ -556,14 +565,6 @@ My choice of public transportation is the train - the commuter line, to be exact
         clearDynamicUI();
         dynamicUI.appendChild(nextBtn1);
     }
-
-    // Expose handlers to global scope for inline events
-    window.handleDragStart = handleDragStart;
-    window.handleDragOver = handleDragOver;
-    window.handleDragEnter = handleDragEnter;
-    window.handleDragLeave = handleDragLeave;
-    window.handleDrop = handleDrop;
-    window.removeFromZone = removeFromZone;
 
     document.getElementById("showBlogBtn").onclick = () => {
         alert("📖 Blog text:\n\n" + fullBlogText);
