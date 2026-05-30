@@ -1,81 +1,245 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Milia AI Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Milia - Talk with AI</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
         body {
             background: #1a1e2c;
-            color: white;
-            font-family: system-ui;
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, 'Segoe UI', sans-serif;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 500px;
             height: 100vh;
-            margin: 0;
+            max-height: 950px;
+            background-color: #2a2f3f;
+            position: relative;
+            overflow: hidden;
         }
-        .chat-box {
-            background: #2a2f3f;
+        /* Background image */
+        .bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('../assets/bg_main.png');
+            background-size: cover;
+            background-position: center;
+            z-index: 1;
+        }
+        /* Milia character - left side */
+        .character-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 45%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 2;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .character-layer img {
+            max-width: 100%;
+            width: auto;
+            height: 48vh;
+            max-height: 420px;
+            object-fit: contain;
+            object-position: bottom;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3));
+        }
+        /* Chat container - right side and bottom */
+        .chat-container {
+            position: absolute;
+            bottom: 20px;
+            right: 12px;
+            left: 130px;      /* leaves space for Milia on left */
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(14px);
             border-radius: 28px;
-            padding: 20px;
-            width: 90%;
-            max-width: 400px;
+            padding: 14px 16px;
+            z-index: 3;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            max-height: 70vh;
         }
-        .messages {
-            height: 300px;
+        .chat-messages {
+            flex: 1;
             overflow-y: auto;
-            margin-bottom: 15px;
-            background: #1e2434;
-            border-radius: 20px;
-            padding: 10px;
+            margin-bottom: 12px;
+            padding-right: 6px;
+            max-height: 50vh;
         }
-        .user { color: #aaf; }
-        .milia { color: #fda; }
-        input, button {
-            padding: 10px;
+        .message {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            max-width: 90%;
+            font-size: 0.85rem;
+            word-wrap: break-word;
+        }
+        .message.user {
+            background: #6c5ce7;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+            text-align: right;
+        }
+        .message.milia {
+            background: #3a4a5c;
+            color: #f0f0f0;
+            align-self: flex-start;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 8px;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px;
             border-radius: 40px;
             border: none;
-        }
-        input {
-            width: 70%;
-            background: #3a4a5c;
+            background: #2e3a48;
             color: white;
+            font-size: 0.85rem;
+            outline: none;
         }
-        button {
-            width: 25%;
+        .input-area button {
             background: #FFB347;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 40px;
             font-weight: bold;
             cursor: pointer;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            z-index: 10;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .mute-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            border: none;
+            font-size: 1.5rem;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            color: white;
+        }
+        @media (max-height: 700px) {
+            .character-layer img { height: 40vh; }
+            .chat-container { max-height: 65vh; }
         }
     </style>
 </head>
 <body>
-<div class="chat-box">
-    <h2>🌸 Talk with Milia (AI)</h2>
-    <div class="messages" id="messages"></div>
-    <input type="text" id="question" placeholder="Ask about writing a blog...">
-    <button id="send">Send</button>
-    <br><br>
-    <button onclick="window.location.href='../index.html'">◀ Back</button>
+<div class="game-container">
+    <div class="bg-layer"></div>
+    <div class="character-layer">
+        <img id="miliaImage" src="../assets/milia_normal.png" alt="Milia">
+    </div>
+    <div class="chat-container">
+        <div class="chat-messages" id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="question" placeholder="Ask Milia about writing a blog...">
+            <button id="send">Send</button>
+        </div>
+    </div>
+    <button class="back-btn" onclick="window.location.href='../index.html'">◀ Back</button>
+    <button class="mute-btn" id="muteToggleBtn">🔊</button>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+    // ---------- Worker URL (same as working version) ----------
     const WORKER_URL = 'https://milia-gemini-proxy.r-arya0882.workers.dev';
 
+    // DOM elements
     const messagesDiv = document.getElementById('messages');
     const questionInput = document.getElementById('question');
     const sendBtn = document.getElementById('send');
+    const miliaImage = document.getElementById('miliaImage');
+    const muteBtn = document.getElementById('muteToggleBtn');
 
-    if (!messagesDiv || !questionInput || !sendBtn) {
-        console.error('Required elements not found');
-        return;
+    // ---------- Audio (optional BGM) ----------
+    let bgmAudio = null;
+    let isMuted = false;
+    function playBGM() {
+        if (bgmAudio) bgmAudio.pause();
+        bgmAudio = new Audio("../audio/main1.mp3");
+        bgmAudio.loop = true;
+        bgmAudio.volume = isMuted ? 0 : 0.3;
+        bgmAudio.play().catch(e => console.log("BGM play skipped"));
+    }
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (bgmAudio) bgmAudio.volume = isMuted ? 0 : 0.3;
+        muteBtn.textContent = isMuted ? "🔇" : "🔊";
+    }
+    muteBtn.addEventListener('click', toggleMute);
+    playBGM();
+
+    // ---------- Milia pose management ----------
+    const poses = {
+        normal: "../assets/milia_normal.png",
+        smug: "../assets/milia_smug.png",
+        serious: "../assets/milia_serious.png",
+        thinking: "../assets/milia_thinking.png"
+    };
+    function setPose(pose) {
+        if (poses[pose]) miliaImage.src = poses[pose];
+        else miliaImage.src = poses.normal;
     }
 
+    // Simple sentiment analysis to choose a reply pose
+    function choosePoseFromReply(replyText) {
+        const lowerReply = replyText.toLowerCase();
+        if (lowerReply.includes("great") || lowerReply.includes("excellent") || lowerReply.includes("good job") || lowerReply.includes("well done")) {
+            return "smug";
+        } else if (lowerReply.includes("remember") || lowerReply.includes("important") || lowerReply.includes("note") || lowerReply.includes("carefully")) {
+            return "serious";
+        } else {
+            return "normal";
+        }
+    }
+
+    // ---------- Chat logic (same as working version) ----------
     function addMessage(sender, text) {
         const msg = document.createElement('div');
-        msg.className = sender;
+        msg.className = `message ${sender}`;
         msg.innerHTML = `<strong>${sender === 'user' ? 'You' : 'Milia'}:</strong> ${text}`;
         messagesDiv.appendChild(msg);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -88,7 +252,13 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessage('user', question);
         questionInput.value = '';
 
-        addMessage('milia', '✍️ Thinking...');
+        // Show "thinking" indicator and change Milia's pose to thinking
+        const thinkingMsg = document.createElement('div');
+        thinkingMsg.className = 'message milia';
+        thinkingMsg.innerHTML = `<strong>Milia:</strong> ✍️ Thinking...`;
+        messagesDiv.appendChild(thinkingMsg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        setPose('thinking');
 
         try {
             const response = await fetch(WORKER_URL, {
@@ -98,25 +268,35 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             const data = await response.json();
 
-            messagesDiv.removeChild(messagesDiv.lastChild);
+            // Remove the thinking message
+            messagesDiv.removeChild(thinkingMsg);
 
             if (data.error) {
                 addMessage('milia', `Error: ${data.error}`);
+                setPose('serious');  // show serious pose on error
             } else {
-                addMessage('milia', data.reply);
+                const reply = data.reply;
+                addMessage('milia', reply);
+                // Choose a pose based on the reply content
+                const pose = choosePoseFromReply(reply);
+                setPose(pose);
             }
         } catch (err) {
-            messagesDiv.removeChild(messagesDiv.lastChild);
+            messagesDiv.removeChild(thinkingMsg);
             addMessage('milia', `Connection error: ${err.message}`);
+            setPose('serious');
             console.error(err);
         }
     }
 
+    // Event listeners
     sendBtn.addEventListener('click', askMilia);
     questionInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') askMilia();
     });
-});
+
+    // Ensure Milia starts with normal pose
+    setPose('normal');
 </script>
 </body>
 </html>
