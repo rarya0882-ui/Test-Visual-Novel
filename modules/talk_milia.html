@@ -1,57 +1,43 @@
-<script>
-    // Correct Worker URL with https://
-    const WORKER_URL = 'https://milia-gemini-proxy.r-arya0882.workers.dev';
-
-    const chatMessages = document.getElementById('chatMessages');
-    const userInput = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
-
-    function addMessage(sender, text) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${sender}`;
-        msgDiv.textContent = text;
-        chatMessages.appendChild(msgDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    async function askMilia() {
-        const question = userInput.value.trim();
-        if (!question) return;
-
-        addMessage('user', question);
-        userInput.value = '';
-
-        const typingDiv = document.createElement('div');
-        typingDiv.className = 'message milia';
-        typingDiv.textContent = '✍️ Milia is thinking...';
-        chatMessages.appendChild(typingDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        try {
-            // Use WORKER_URL variable (with https://)
-            const response = await fetch(WORKER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: question })
-            });
-
-            const data = await response.json();
-            typingDiv.remove();
-
-            if (data.error) {
-                addMessage('milia', `Hmm, I'm having trouble. Error: ${data.error}`);
-            } else {
-                addMessage('milia', data.reply);
-            }
-        } catch (error) {
-            typingDiv.remove();
-            addMessage('milia', 'Connection error. Please try again later.');
-            console.error('Fetch error:', error);
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milia - Talk</title>
+    <style>
+        body {
+            background: #1a1e2c;
+            color: white;
+            font-family: system-ui;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
-    }
-
-    sendBtn.addEventListener('click', askMilia);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') askMilia();
-    });
-</script>
+        .container {
+            text-align: center;
+            background: #2a2f3f;
+            padding: 20px;
+            border-radius: 28px;
+            max-width: 90%;
+        }
+        button {
+            background: #FFB347;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-weight: bold;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🌸 Milia</h1>
+    <p>This is the Talk with Milia page. (AI chat will go here)</p>
+    <button onclick="window.location.href='../index.html'">Back to Station</button>
+</div>
+</body>
+</html>
