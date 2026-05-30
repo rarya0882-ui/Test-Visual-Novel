@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Milia - Fill in the Chart</title>
+    <title>Milia - Fill in the Chart (Drag & Drop)</title>
     <style>
         * {
             margin: 0;
@@ -40,7 +40,6 @@
             background-position: center;
             z-index: 1;
         }
-        /* Milia character - centered at bottom */
         .character-layer {
             position: absolute;
             bottom: 0;
@@ -62,13 +61,12 @@
             object-position: bottom;
             filter: drop-shadow(0 8px 12px rgba(0,0,0,0.3));
         }
-        /* Dialogue box - bottom, overlapping Milia's lower body */
         .dialogue-area {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0,0,0,0.85);
             backdrop-filter: blur(14px);
             border-radius: 28px 28px 0 0;
             padding: 16px 20px max(20px, env(safe-area-inset-bottom));
@@ -89,7 +87,6 @@
             color: #f0f0f0;
             margin-bottom: 12px;
         }
-        /* Activity panel - hidden initially, appears above Milia's head */
         .activity-content {
             position: absolute;
             top: 20px;
@@ -109,24 +106,64 @@
             font-size: 1.2rem;
             font-weight: bold;
             color: #2c3e66;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             text-align: center;
         }
+        /* Two column layout: options (left) and chart (right) for wider screens? But on mobile, stack */
+        .drag-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .options-area {
+            background: #e9ecef;
+            border-radius: 24px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .options-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e66;
+        }
+        .draggable-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .drag-card {
+            background: #6c5ce7;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            cursor: grab;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: 0.1s;
+            display: inline-block;
+            text-align: center;
+        }
+        .drag-card:active {
+            cursor: grabbing;
+        }
+        .drag-card.dragging {
+            opacity: 0.5;
+        }
+        /* Chart table */
         .chart-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
             background: white;
             border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 10px;
         }
         .chart-table th, .chart-table td {
             border: 1px solid #ddd;
-            padding: 12px 10px;
-            text-align: left;
+            padding: 10px 8px;
             vertical-align: top;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
         .chart-table th {
             background: #6c5ce7;
@@ -135,14 +172,27 @@
         }
         .chart-table td {
             background: #fef9e6;
+            min-height: 60px;
         }
-        select, input {
-            width: 100%;
-            padding: 8px;
+        .drop-zone {
+            min-height: 60px;
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 6px;
+            transition: background 0.1s;
+        }
+        .drop-zone.drag-over {
+            background: #ffe0b5;
+        }
+        .dropped-item {
+            background: #4caf50;
+            color: white;
             border-radius: 20px;
-            border: 1px solid #ccc;
-            font-size: 0.85rem;
-            background: white;
+            padding: 5px 10px;
+            display: inline-block;
+            font-size: 0.75rem;
+            margin: 2px;
+            cursor: pointer;
         }
         .check-btn {
             background: #FFB347;
@@ -162,6 +212,7 @@
             border-radius: 28px;
             text-align: center;
             font-size: 0.8rem;
+            margin-top: 10px;
         }
         .next-quiz-btn {
             background: #4caf50;
@@ -229,21 +280,37 @@
 </div>
 
 <script>
-    // Full blog text for reference
+    // Full blog text
     const fullBlogText = `I Love Trains
 
 My choice of public transportation is the train - the commuter line, to be exact. I live outside of a big city. I often have to travel many kilometers almost every day. Fortunately, the commuter line helps me to get to the big city fast. It is faster than the bus and the public minivan. Also, the commuter line fare is reasonable. It costs me only Rp3,000 for the first five stations. It is much cheaper than the bus fare. Finally, the commuter line runs on tracks or rails, so, it is the safest of all public land transportations.`;
 
-    // Correct answers for the chart
-    const correctAnswers = {
-        opinion: "The blogger loves / is a fan of the commuter line.",
-        reason1: "It is fast (helps get to the big city quickly).",
-        reason2: "It is not expensive (reasonable fare, cheaper than bus).",
-        reason3: "It is safe (runs on tracks/rails)."
+    // Draggable sentence options
+    const optionSentences = [
+        "The blogger loves the commuter line.",
+        "The commuter line is fast (gets to the big city quickly).",
+        "The fare is reasonable and cheaper than the bus.",
+        "It is safe because it runs on tracks/rails."
+    ];
+
+    // Mapping: which sentence belongs to which chart row (0=opinion,1=speed,2=cost,3=safety)
+    const correctMapping = {
+        "The blogger loves the commuter line.": 0,
+        "The commuter line is fast (gets to the big city quickly).": 1,
+        "The fare is reasonable and cheaper than the bus.": 2,
+        "It is safe because it runs on tracks/rails.": 3
     };
 
     let waitingForNext = false;
     let checkInProgress = false;
+    // Store current assignments: each drop zone id -> sentence text (or null)
+    let assignments = {
+        opinion: null,
+        reason1: null,
+        reason2: null,
+        reason3: null
+    };
+    let availableOptions = [...optionSentences]; // track which still not placed
 
     // DOM elements
     const dialogueTextSpan = document.getElementById("dialogueText");
@@ -282,87 +349,149 @@ My choice of public transportation is the train - the commuter line, to be exact
         characterLayer.classList.remove("hidden");
         dialogueArea.classList.remove("hidden");
     }
-
     function hideMilia() {
         characterLayer.classList.add("hidden");
         dialogueArea.classList.add("hidden");
     }
-
     function displayMiliaMessage(text, pose="normal") {
         dialogueTextSpan.innerText = text;
         setPose(pose);
         showMilia();
     }
-
     function clearDynamicUI() {
         dynamicUI.innerHTML = "";
     }
 
-    // Render the chart activity
+    // Drag and drop handlers
+    function handleDragStart(e, text) {
+        if (waitingForNext) return;
+        e.dataTransfer.setData("text/plain", text);
+        e.dataTransfer.effectAllowed = "move";
+    }
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+    }
+    function handleDragEnter(e) {
+        e.target.closest('.drop-zone')?.classList.add('drag-over');
+    }
+    function handleDragLeave(e) {
+        e.target.closest('.drop-zone')?.classList.remove('drag-over');
+    }
+    function handleDrop(e, zoneId) {
+        e.preventDefault();
+        const dropZone = e.target.closest('.drop-zone');
+        if (dropZone) dropZone.classList.remove('drag-over');
+        if (waitingForNext) return;
+        const sentence = e.dataTransfer.getData("text/plain");
+        if (!sentence) return;
+
+        // Check if sentence is still available (not already placed elsewhere)
+        if (!availableOptions.includes(sentence)) return;
+
+        // Check if target zone already has a sentence (replace allowed? We'll allow replace)
+        const current = assignments[zoneId];
+        if (current) {
+            // return the old sentence to available options
+            availableOptions.push(current);
+            assignments[zoneId] = null;
+        }
+        // Place new sentence
+        assignments[zoneId] = sentence;
+        // Remove from available options
+        const index = availableOptions.indexOf(sentence);
+        if (index !== -1) availableOptions.splice(index,1);
+        renderChart();
+    }
+
+    // Remove a sentence from a zone (click on placed item)
+    function removeFromZone(zoneId) {
+        if (waitingForNext) return;
+        const sentence = assignments[zoneId];
+        if (sentence) {
+            assignments[zoneId] = null;
+            availableOptions.push(sentence);
+            renderChart();
+        }
+    }
+
+    // Render the whole drag & drop UI
     function renderChart() {
+        // Build HTML for options (only those still available)
+        const optionsHtml = availableOptions.map(opt => `
+            <div class="drag-card" draggable="true" ondragstart="handleDragStart(event, '${opt.replace(/'/g, "\\'")}')">
+                ${opt}
+            </div>
+        `).join('');
+        
+        const zones = {
+            opinion: { label: "Blogger's opinion about the commuter line", value: assignments.opinion },
+            reason1: { label: "Reason 1 (speed)", value: assignments.reason1 },
+            reason2: { label: "Reason 2 (cost)", value: assignments.reason2 },
+            reason3: { label: "Reason 3 (safety)", value: assignments.reason3 }
+        };
+
+        let tableRows = '';
+        for (const [key, zone] of Object.entries(zones)) {
+            const droppedContent = zone.value ? `<div class="dropped-item" onclick="removeFromZone('${key}')">✖ ${zone.value}</div>` : `<div style="color:#aaa; text-align:center;">Drop sentence here</div>`;
+            tableRows += `
+                <tr>
+                    <td style="width:40%;">${zone.label}</td>
+                    <td>
+                        <div class="drop-zone" 
+                             ondragover="handleDragOver(event)" 
+                             ondragenter="handleDragEnter(event)" 
+                             ondragleave="handleDragLeave(event)"
+                             ondrop="handleDrop(event, '${key}')">
+                            ${droppedContent}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
         const html = `
-            <div class="activity-title">📊 Fill in the Chart</div>
-            <table class="chart-table">
-                <tr><th>Category</th><th>Answer (from the blog)</th></tr>
-                <tr>
-                    <td>Blogger's opinion about the commuter line</td>
-                    <td><input type="text" id="opinion" placeholder="Type your answer..."></td>
-                </tr>
-                <tr>
-                    <td>Reason 1 (speed)</td>
-                    <td><input type="text" id="reason1" placeholder="Type your answer..."></td>
-                </tr>
-                <tr>
-                    <td>Reason 2 (cost)</td>
-                    <td><input type="text" id="reason2" placeholder="Type your answer..."></td>
-                </tr>
-                <tr>
-                    <td>Reason 3 (safety)</td>
-                    <td><input type="text" id="reason3" placeholder="Type your answer..."></td>
-                </tr>
-            </table>
-            <button class="check-btn" id="checkChartBtn">✅ Check Answers</button>
-            <div class="feedback-area" id="feedbackArea"></div>
+            <div class="activity-title">📊 Drag & Drop – Fill the Chart</div>
+            <div class="drag-container">
+                <div class="options-area">
+                    <div class="options-title">📦 Drag these sentences to the correct chart cells:</div>
+                    <div class="draggable-cards" id="draggableCards">
+                        ${optionsHtml || '<div style="text-align:center;">All sentences placed!</div>'}
+                    </div>
+                </div>
+                <table class="chart-table">
+                    <thead><tr><th>Category</th><th>Your Answer (drag & drop)</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+                <button class="check-btn" id="checkChartBtn">✅ Check Answers</button>
+                <div class="feedback-area" id="feedbackArea"></div>
+            </div>
         `;
         activityContainer.innerHTML = html;
         document.getElementById("checkChartBtn").addEventListener("click", checkChart);
-    }
-
-    // Simple string normalization for comparison (lowercase, trim, remove extra spaces)
-    function normalize(str) {
-        return str.toLowerCase().trim().replace(/\s+/g, ' ');
     }
 
     function checkChart() {
         if (waitingForNext || checkInProgress) return;
         checkInProgress = true;
 
-        const userOpinion = document.getElementById("opinion").value;
-        const userReason1 = document.getElementById("reason1").value;
-        const userReason2 = document.getElementById("reason2").value;
-        const userReason3 = document.getElementById("reason3").value;
-
-        // Define acceptable variations for each answer (flexible matching)
-        const acceptable = {
-            opinion: ["loves", "is a fan", "likes", "choice is", "my choice", "fan of"],
-            reason1: ["fast", "quickly", "helps me get to the big city fast", "saves time"],
-            reason2: ["not expensive", "reasonable", "cheap", "rp3,000", "cheaper than bus"],
-            reason3: ["safe", "safest", "runs on tracks", "rails", "safest of all"]
-        };
-
-        function isMatch(input, keywords) {
-            const norm = normalize(input);
-            return keywords.some(kw => norm.includes(normalize(kw)));
+        // Validate all four zones are filled
+        const allFilled = assignments.opinion && assignments.reason1 && assignments.reason2 && assignments.reason3;
+        const feedbackDiv = document.getElementById("feedbackArea");
+        if (!allFilled) {
+            feedbackDiv.innerHTML = "⚠️ Please drag a sentence into every chart cell (Opinion, Reason 1, Reason 2, Reason 3).";
+            displayMiliaMessage("You need to fill all four boxes.", "thinking");
+            setTimeout(() => { hideMilia(); checkInProgress = false; }, 2500);
+            return;
         }
 
-        const correctOpinion = isMatch(userOpinion, acceptable.opinion);
-        const correctReason1 = isMatch(userReason1, acceptable.reason1);
-        const correctReason2 = isMatch(userReason2, acceptable.reason2);
-        const correctReason3 = isMatch(userReason3, acceptable.reason3);
-
+        // Check correctness
+        const correctOpinion = (correctMapping[assignments.opinion] === 0);
+        const correctReason1 = (correctMapping[assignments.reason1] === 1);
+        const correctReason2 = (correctMapping[assignments.reason2] === 2);
+        const correctReason3 = (correctMapping[assignments.reason3] === 3);
         const allCorrect = correctOpinion && correctReason1 && correctReason2 && correctReason3;
 
-        const feedbackDiv = document.getElementById("feedbackArea");
         if (allCorrect) {
             waitingForNext = true;
             feedbackDiv.innerHTML = "✅ All answers correct! Well done!";
@@ -386,12 +515,12 @@ My choice of public transportation is the train - the commuter line, to be exact
             if (!correctReason1) wrongFields.push("Reason 1 (speed)");
             if (!correctReason2) wrongFields.push("Reason 2 (cost)");
             if (!correctReason3) wrongFields.push("Reason 3 (safety)");
-            feedbackDiv.innerHTML = `⚠️ Incorrect: ${wrongFields.join(", ")}. Try again.`;
+            feedbackDiv.innerHTML = `⚠️ Incorrect: ${wrongFields.join(", ")}. Try dragging the correct sentences.`;
             const hints = [
-                "Read the blog again carefully. The opinion is stated at the beginning.",
-                "Look for words like 'fast', 'quickly' for speed.",
-                "Find the sentence about fare and cost.",
-                "The safety reason mentions 'tracks' or 'rails'."
+                "Read the blog again. The opinion is at the beginning.",
+                "Speed reason mentions 'fast' or 'quickly'.",
+                "Cost reason talks about fare and cheaper than bus.",
+                "Safety reason mentions tracks or rails."
             ];
             const randomHint = hints[Math.floor(Math.random() * hints.length)];
             displayMiliaMessage(randomHint, "thinking");
@@ -408,11 +537,15 @@ My choice of public transportation is the train - the commuter line, to be exact
         nextBtn1.innerText = "Continue";
         nextBtn1.className = "next-quiz-btn";
         nextBtn1.onclick = () => {
-            displayMiliaMessage("Fill in the chart with the blogger's opinion and three reasons from the blog.", "serious");
+            displayMiliaMessage("Drag each sentence into the correct category: Opinion, Speed Reason, Cost Reason, or Safety Reason.", "serious");
             const nextBtn2 = document.createElement("button");
             nextBtn2.innerText = "Start Chart";
             nextBtn2.className = "next-quiz-btn";
             nextBtn2.onclick = () => {
+                // Reset assignments and available options
+                assignments = { opinion: null, reason1: null, reason2: null, reason3: null };
+                availableOptions = [...optionSentences];
+                waitingForNext = false;
                 hideMilia();
                 activityContainer.style.display = "block";
                 renderChart();
@@ -423,6 +556,14 @@ My choice of public transportation is the train - the commuter line, to be exact
         clearDynamicUI();
         dynamicUI.appendChild(nextBtn1);
     }
+
+    // Expose handlers to global scope for inline events
+    window.handleDragStart = handleDragStart;
+    window.handleDragOver = handleDragOver;
+    window.handleDragEnter = handleDragEnter;
+    window.handleDragLeave = handleDragLeave;
+    window.handleDrop = handleDrop;
+    window.removeFromZone = removeFromZone;
 
     document.getElementById("showBlogBtn").onclick = () => {
         alert("📖 Blog text:\n\n" + fullBlogText);
